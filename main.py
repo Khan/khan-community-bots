@@ -2,6 +2,7 @@ import json
 
 import webapp2
 
+import community_lead_bot
 import github_api
 
 
@@ -44,7 +45,7 @@ class IssueWebhook(webapp2.RequestHandler):
 
     def post(self):
         issue = self.construct_issue()
-        issue.process()
+        community_lead_bot.handle_issue_event(issue)
 
         self.response.headers["Content-Type"] = "text/plain"
         self.response.write("ok")
