@@ -6,12 +6,16 @@ import logging
 import datetime
 import base64
 
+import google.appengine.ext.ndb as ndb
 import google.appengine.api.urlfetch as urlfetch
 import webapp2
 
-import secrets
-
 RepoID = collections.namedtuple("RepoID", ["owner", "name"])
+
+class Secret(ndb.Model):
+    """Models an individual Guestbook entry with content and date."""
+    _use_memcache = False
+    content = ndb.StringProperty(indexed=False)
 
 
 def call_github_api(url, method=urlfetch.GET, payload=None):
@@ -20,7 +24,7 @@ def call_github_api(url, method=urlfetch.GET, payload=None):
 
     headers = {
         "Accept": "Accept: application/vnd.github.v3+json",
-        "Authorization": "Basic " + secrets.COMMUNITY_LEAD_BOT_AUTH,
+        "Authorization": "Basic " + Secret.get_by_id("community-lead-bot-auth").content,
     }
     if method == urlfetch.POST and payload is not None:
         headers["Content-Type"] = "application/json"
