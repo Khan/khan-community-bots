@@ -1,4 +1,4 @@
-.PHONY: lint linc serve
+.PHONY: lint linc serve deploy
 
 lint linc:
 	../devtools/khan-linter/runlint.py .
@@ -10,3 +10,6 @@ serve:
 	else \
 		dev_appserver.py $$dev_args ./app.yaml; \
 	fi
+
+deploy:
+	appcfg.py -A khan-community-bots update app.yaml
