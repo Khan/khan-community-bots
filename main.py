@@ -27,8 +27,6 @@ def call_github_api(url, method=urlfetch.GET, payload=None):
 
     encoded_payload = None if payload is None else json.dumps(payload)
 
-    logging.info("%r %r", encoded_payload, headers)
-
     response = urlfetch.fetch(
         full_url,
         headers=headers,
@@ -161,7 +159,8 @@ class Issue(BaseIssue):
     def get_applicable_labels(self):
         """Returns a set of labels that apply to this issue."""
         labels = set()
-        if datetime.datetime.now() >= self.get_idle_at():
+        idle_at = self.get_idle_at()
+        if idle_at and datetime.datetime.now() >= idle_at:
             labels.add("idle")
         return labels
 
@@ -242,13 +241,40 @@ class PullRequest(BaseIssue):
         self.set_labels(desired_labels, ignore={"waiting for submitter"})
 
 
-class MainPage(webapp2.RequestHandler):
-    def get(self):
-        self.response.headers['Content-Type'] = 'text/plain'
+class UnexpectedGithubEvent(RuntimeError):
+    def __init__(self, event):
+        self.event = event
 
-        test_pull_request = PullRequest(RepoID("brownhead", "haunted-house"), 2)
-        self.response.write(test_pull_request.get_idle_at().strftime("%Y-%m-%d %H:%M:%S"))
+    def __repr__(self):
+        return "UnexpectedGithubEvent(event={!r})".format(self.event)
+
+
+class IssueWebhook(webapp2.RequestHandler):
+    """Handler for webhooks concerning issues."""
+
+    def construct_issue(self):
+        """Creates an Issue with the information contained in the request.
+
+        This will interpret the payload based on the event type. If the event
+        type is not recognized, an UnexpectedGithubEvent will be raised.
+        """
+        payload_json = json.loads(self.request.body)
+        event_type = self.request.headers["X-Github-Event"]
+        if event_type != "issues" and event_type != "issue_comment":
+            raise UnexpectedGithubEvent(event_type)
+
+        return Issue(
+            RepoID(payload_json["repository"]["owner"]["login"],
+                   payload_json["repository"]["name"]),
+            payload_json["issue"]["number"])
+
+    def post(self):
+        issue = self.construct_issue()
+        issue.process()
+
+        self.response.headers["Content-Type"] = "text/plain"
+        self.response.write("ok")
 
 app = webapp2.WSGIApplication([
-    ('/', MainPage),
-], debug=True)
+    ("/community-lead-bot/webhooks/github/issue", IssueWebhook),
+])
