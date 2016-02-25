@@ -253,6 +253,16 @@ class UnexpectedGithubEvent(RuntimeError):
         return "UnexpectedGithubEvent(event={!r})".format(self.event)
 
 
+class HealthCheck(webapp2.RequestHandler):
+    def get(self):
+        limit_info = call_github_api("/rate_limit")
+        if limit_info["rate"]["limit"] < 5000:
+            raise RuntimeError("Using unauthenticated rate.")
+
+        self.response.headers["Content-Type"] = "text/plain"
+        self.response.write("ok")
+
+
 class IssueWebhook(webapp2.RequestHandler):
     """Handler for webhooks concerning issues."""
 
@@ -280,5 +290,6 @@ class IssueWebhook(webapp2.RequestHandler):
         self.response.write("ok")
 
 app = webapp2.WSGIApplication([
+    ("/health-check", HealthCheck),
     ("/community-lead-bot/webhooks/github/issue", IssueWebhook),
 ])
