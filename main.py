@@ -87,13 +87,14 @@ class BaseIssue(object):
         return {i["name"] for i in self.fetch_labels()
                 if i["name"] in self.CONTROLLED_LABELS}
 
-    def set_labels(self, labels):
+    def set_labels(self, labels, ignore=None):
         if not labels.issubset(self.CONTROLLED_LABELS):
             raise ValueError(
                 "Uncontrolled labels present: %r" % (
                     labels - self.CONTROLLED_LABELS))
 
         current_labels = self.fetch_controlled_label_names()
+        current_labels -= ignore if ignore else set()
 
         to_delete = current_labels - labels
         for label in to_delete:
@@ -157,6 +158,21 @@ class Issue(BaseIssue):
         issue_data = self.fetch_issue_data()
         return convert_date_time(issue_data["created_at"]) + datetime.timedelta(days=7)
 
+    def get_applicable_labels(self):
+        """Returns a set of labels that apply to this issue."""
+        labels = set()
+        if datetime.datetime.now() >= self.get_idle_at():
+            labels.add("idle")
+        return labels
+
+    def process(self):
+        """Does any actions required for an issue.
+
+        This will check to see if we need to do anything, and then do it.
+        """
+        desired_labels = self.get_applicable_labels()
+        self.set_labels(desired_labels, ignore={"waiting for submitter"})
+
 
 class PullRequest(BaseIssue):
     def __init__(self, *args, **kwargs):
@@ -182,6 +198,11 @@ class PullRequest(BaseIssue):
             return None
 
         def get_latest(sequence):
+            """Get the latest datetime in a sequence of them.
+
+            None values will be ignored, and None will be returned if the
+            sequence is empty.
+            """
             pruned_sequence = [i for i in sequence if i is not None]
             if not pruned_sequence:
                 return None
@@ -204,6 +225,21 @@ class PullRequest(BaseIssue):
 
         created_at = convert_date_time(self.fetch_issue_data()["created_at"])
         return get_latest([created_at, last_unlabeled, last_commented]) + datetime.timedelta(days=7)
+
+    def get_applicable_labels(self):
+        """Returns a set of labels that apply to this pull request."""
+        labels = set()
+        if datetime.datetime.now() >= self.get_idle_at():
+            labels.add("idle")
+        return labels
+
+    def process(self):
+        """Does any actions required for an pull request.
+
+        This will check to see if we need to do anything, and then do it.
+        """
+        desired_labels = self.get_applicable_labels()
+        self.set_labels(desired_labels, ignore={"waiting for submitter"})
 
 
 class MainPage(webapp2.RequestHandler):
