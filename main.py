@@ -106,6 +106,31 @@ class BaseIssue(object):
         call_github_api(self.get_base_url() + "/labels",
                         method=urlfetch.POST, payload=list(to_add))
 
+    def _get_expired_at(self, expire_time_delta):
+        """Get the time at which this issue will become expired.
+
+        If this time is in the past, then this issue is currently expired.
+
+        An issue is expired if it has been labeled with `waiting for submitter`
+        continuously for the last `expire_time_delta`.
+        """
+        events = self.fetch_event_activity()
+
+        # Get the last labeling and unlabeling event involving the `waiting for
+        # submitter` label.
+        labeling_events = [
+            event for event in events
+            if event["event"] in ["labeled", "unlabeled"] and
+               event["label"]["name"] == "waiting for submitter"]
+        last_event = labeling_events[-1] if labeling_events else None
+
+        # If the issue is not currently labeled as waiting for submitter, it
+        # cannot expire.
+        if last_event["event"] == "unlabled":
+            return None
+
+        return convert_date_time(last_event["created_at"]) + expire_time_delta
+
 
 class Issue(BaseIssue):
     def __init__(self, *args, **kwargs):
