@@ -44,7 +44,16 @@ class IssueWebhook(webapp2.RequestHandler):
             payload_json["issue"]["number"])
 
     def post(self):
-        issue = self.construct_issue()
+        payload_json = json.loads(self.request.body)
+        event_type = self.request.headers["X-Github-Event"]
+        if event_type != "issues" and event_type != "issue_comment":
+            raise UnexpectedGithubEvent(event_type)
+
+        issue = github_api.Issue(
+            github_api.RepoID(payload_json["repository"]["owner"]["login"],
+                              payload_json["repository"]["name"]),
+            payload_json["issue"]["number"])
+
         community_lead_bot.handle_issue_event(issue)
 
         self.response.headers["Content-Type"] = "text/plain"
