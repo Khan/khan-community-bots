@@ -18,12 +18,15 @@ class AtRiskIssue(ndb.Model):
 
     @property
     def repo_id(self):
-        split_id = self.id.split("/")
+        split_id = self.key.string_id().split("/")
         return github_api.RepoID(split_id[0], split_id[1])
 
     @property
     def number(self):
-        return int(self.id.split("/")[2])
+        return int(self.key.string_id().split("/")[2])
+
+    def get_issue_or_pr(self):
+        return github_api.Issue(self.repo_id, self.number)
 
 
 def get_issue_idle_at(issue):
@@ -97,27 +100,33 @@ def get_pull_request_idle_at(pull_request):
     return get_latest([created_at, last_unlabeled, last_commented]) + datetime.timedelta(days=7)
 
 
+def get_issue_type(issue_or_pr):
+    if isinstance(issue_or_pr, github_api.Issue):
+        return "issue"
+    elif isinstance(issue_or_pr, github_api.PullRequest):
+        return "pull-request"
+    else:
+        raise ValueError("Did not receive an Issue or Pull Request")
+
+
+def get_idle_at(issue_or_pr):
+    # Determine if this issue is no longer idle and remove the tag if so.
+    issue_type = get_issue_type(issue_or_pr)
+    if issue_type == "issue":
+        return get_issue_idle_at(issue_or_pr)
+    elif issue_type == "pull-request":
+        return get_pull_request_idle_at(issue_or_pr)
+    else:
+        raise ValueError("Did not receive an Issue or Pull Request")
+
+
 def handle_issue_event(issue_or_pr):
     """When an event concerning an issue or PR is received, this method is
     called.
     """
-    issue_type = None
-    if isinstance(issue_or_pr, github_api.Issue):
-        issue_type = "issue"
-    elif isinstance(issue_or_pr, github_api.PullRequest):
-        issue_type = "pull-request"
-    else:
-        raise ValueError("Did not receive an Issue or Pull Request")
+    idle_at = get_idle_at(issue_or_pr)
 
-    # Determine if this issue is no longer idle and remove the tag if so.
-    idle_at = None
-    if issue_type == "issue":
-        idle_at = get_issue_idle_at(issue_or_pr)
-    elif issue_type == "pull-request":
-        idle_at = get_pull_request_idle_at(issue_or_pr)
-    else:
-        raise ValueError("Did not receive an Issue or Pull Request")
-
+    # If the issue isn't idle, make sure it doesn't have the idle label
     if idle_at is None:
         issue_or_pr.remove_label("idle")
 
@@ -128,25 +137,35 @@ def handle_issue_event(issue_or_pr):
         # This might overwrite an already existing entry. This is fine.
         at_risk_issue = AtRiskIssue(
             id=AtRiskIssue.id_for(issue_or_pr.repo_id, issue_or_pr.number),
-            issue_type=issue_type,
+            issue_type=get_issue_type(issue_or_pr),
             should_check_at=idle_at)
         at_risk_issue.put()
 
     # TODO: Deal with expiration
 
 
-def handle_idle_check(issue_or_pr):
+def check_at_risk_issue(at_risk_issue):
     """This is called whenever we suspect an issue or PR may have become
-    idle."""
-    # Determine if this issue is idle and mark it if so.
-    pass
+    idle or expired."""
+    issue_or_pr = at_risk_issue.get_issue_or_pr()
+    idle_at = get_idle_at(issue_or_pr)
+
+    if idle_at is None:
+        at_risk_issue.key.delete()
+    elif idle_at < datetime.datetime.now():
+        at_risk_issue.key.delete()
+        issue_or_pr.add_label("idle")
+    else:
+        at_risk_issue.should_check_at = idle_at
+        at_risk_issue.put()
 
 
-def handle_expire_check(issue_or_pr):
-    """This is called whenever we suspect an issue or PR may have expired."""
-    # Determine if this issue is expired and close it if so, as well as post
-    # the expired message.
-    pass
+def handle_check_at_risk_issues():
+    query = AtRiskIssue.query(
+        AtRiskIssue.should_check_at < datetime.datetime.now())
+    for at_risk_issue in query:
+        logging.info("Checking at risk issue %r", at_risk_issue.key.string_id())
+        check_at_risk_issue(at_risk_issue)
 
 
 def ping_leads_of_idle_issues():

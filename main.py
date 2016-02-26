@@ -59,7 +59,17 @@ class IssueWebhook(webapp2.RequestHandler):
         self.response.headers["Content-Type"] = "text/plain"
         self.response.write("ok")
 
+
+class CheckAtRiskIssues(webapp2.RequestHandler):
+    def get(self):
+        community_lead_bot.handle_check_at_risk_issues()
+
+        self.response.headers["Content-Type"] = "text/plain"
+        self.response.write("ok")
+
+
 app = webapp2.WSGIApplication([
     ("/health-check", HealthCheck),
     ("/community-lead-bot/webhooks/github/issue", IssueWebhook),
+    ("/community-lead-bot/cron/check-at-risk-issues", CheckAtRiskIssues),
 ])
