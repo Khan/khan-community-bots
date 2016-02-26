@@ -11,4 +11,8 @@ def send_message(message):
         url,
         method="POST",
         headers={"Content-Type": "application/json"},
-        payload=json.dumps({"text": message}))
+        payload=json.dumps({
+            "username": "Community Lead Bot",
+            "icon_emoji": ":github:",
+            "text": message,
+        }))
