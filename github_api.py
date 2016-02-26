@@ -52,15 +52,15 @@ class BaseIssue(object):
 
     CONTROLLED_LABELS = {"idle", "waiting for submitter"}
 
-    def __init__(self, repo_id, issue_number):
+    def __init__(self, repo_id, number):
         self.repo_id = repo_id
-        self.issue_number = issue_number
+        self.number = number
 
     def get_base_url(self):
         return ("/repos/{repo_id.owner}/{repo_id.name}/issues/"
-                "{issue_number}").format(
+                "{number}").format(
             repo_id=self.repo_id,
-            issue_number=self.issue_number)
+            number=self.number)
 
     def fetch_issue_data(self):
         return call_github_api(self.get_base_url())

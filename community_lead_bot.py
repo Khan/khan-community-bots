@@ -1,4 +1,30 @@
+import datetime
+import logging
+
+import google.appengine.ext.ndb as ndb
+
 import github_api
+
+
+class AtRiskIssue(ndb.Model):
+    _use_memcache = False
+    issue_type = ndb.StringProperty(indexed=False,
+                                    choices=["issue", "pull-request"])
+    should_check_at = ndb.DateTimeProperty(indexed=True)
+
+    @staticmethod
+    def id_for(repo_id, number):
+        return "{}/{}/{}".format(repo_id.owner, repo_id.name, number)
+
+    @property
+    def repo_id(self):
+        split_id = self.id.split("/")
+        return github_api.RepoID(split_id[0], split_id[1])
+
+    @property
+    def number(self):
+        return int(self.id.split("/")[2])
+
 
 def get_issue_idle_at(issue):
     """Get the time at which the issue will become idle.
@@ -19,7 +45,7 @@ def get_issue_idle_at(issue):
 
     # Otherwise, it'll expire a set time after the issue was created
     issue_data = issue.fetch_issue_data()
-    return convert_date_time(issue_data["created_at"]) + datetime.timedelta(days=7)
+    return github_api.convert_date_time(issue_data["created_at"]) + datetime.timedelta(days=7)
 
 
 def get_pull_request_idle_at(pull_request):
@@ -57,17 +83,17 @@ def get_pull_request_idle_at(pull_request):
     # from this PR.
     events = pull_request.fetch_event_activity()
     last_unlabeled = get_latest(
-        convert_date_time(event["created_at"]) for event in events
+        github_api.convert_date_time(event["created_at"]) for event in events
         if event["event"] == "unlabeled" and
            event["label"]["name"] == "waiting for submitter")
 
     # Figure out the last time a contributor commented on this PR
     comments = pull_request.fetch_comments()
     last_commented = get_latest(
-        convert_date_time(comment["created_at"]) for comment in comments
+        github_api.convert_date_time(comment["created_at"]) for comment in comments
         if github_api.is_contributer(pull_request.repo_id, comment["user"]["login"]))
 
-    created_at = convert_date_time(pull_request.fetch_issue_data()["created_at"])
+    created_at = github_api.convert_date_time(pull_request.fetch_issue_data()["created_at"])
     return get_latest([created_at, last_unlabeled, last_commented]) + datetime.timedelta(days=7)
 
 
@@ -75,11 +101,19 @@ def handle_issue_event(issue_or_pr):
     """When an event concerning an issue or PR is received, this method is
     called.
     """
+    issue_type = None
+    if isinstance(issue_or_pr, github_api.Issue):
+        issue_type = "issue"
+    elif isinstance(issue_or_pr, github_api.PullRequest):
+        issue_type = "pull-request"
+    else:
+        raise ValueError("Did not receive an Issue or Pull Request")
+
     # Determine if this issue is no longer idle and remove the tag if so.
     idle_at = None
-    if isinstance(issue_or_pr, github_api.Issue):
+    if issue_type == "issue":
         idle_at = get_issue_idle_at(issue_or_pr)
-    elif isinstance(issue_or_pr, github_api.PullRequest):
+    elif issue_type == "pull-request":
         idle_at = get_pull_request_idle_at(issue_or_pr)
     else:
         raise ValueError("Did not receive an Issue or Pull Request")
@@ -87,9 +121,18 @@ def handle_issue_event(issue_or_pr):
     if idle_at is None:
         issue_or_pr.remove_label("idle")
 
-    # Determine if this issue will become idle or expired soon and store it
-    # somewhere we'll look at later when marking things as idle and sending out
-    # warnings.
+    # If this issue is going to become idle at some point, make sure we note
+    # it.
+    if idle_at is not None:
+        logging.info("Making a note to check idleness at %r.", idle_at)
+        # This might overwrite an already existing entry. This is fine.
+        at_risk_issue = AtRiskIssue(
+            id=AtRiskIssue.id_for(issue_or_pr.repo_id, issue_or_pr.number),
+            issue_type=issue_type,
+            should_check_at=idle_at)
+        at_risk_issue.put()
+
+    # TODO: Deal with expiration
 
 
 def handle_idle_check(issue_or_pr):
