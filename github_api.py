@@ -24,11 +24,7 @@ def get_leads_for_repo(repo_id):
     raise KeyError("No repo with ID %r" % repo_id)
 
 
-def is_contributer(repo_id, user_login):
-    return True
-
-
-def call_github_api(url, method=urlfetch.GET, payload=None):
+def _fetch_github_api(url, method=urlfetch.GET, payload=None):
     full_url = urlparse.urljoin("https://api.github.com", url)
     logging.info("Making %r request to %r.", method, full_url)
 
@@ -41,15 +37,29 @@ def call_github_api(url, method=urlfetch.GET, payload=None):
 
     encoded_payload = None if payload is None else json.dumps(payload)
 
-    response = urlfetch.fetch(
+    return urlfetch.fetch(
         full_url,
         headers=headers,
         method=method,
         payload=encoded_payload)
+
+
+def call_github_api(url, method=urlfetch.GET, payload=None):
+    response = _fetch_github_api(url, method, payload)
     if response.status_code != 200:
         logging.error("Got error response %r", response.content)
         raise RuntimeError()
     return json.loads(response.content)
+
+
+def is_contributor(repo_id, login):
+    response = _fetch_github_api(
+        "/repos/{}/{}/collaborators/{}".format(
+            repo_id.owner, repo_id.name, login))
+    result = response.status_code == 204
+    logging.info("is_contributor({%r, %r) -> %r (got status code %r)",
+                 repo_id, login, result, response.status_code)
+    return result
 
 
 def get_issues_with_label(repo_id, label):

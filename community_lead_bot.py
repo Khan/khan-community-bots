@@ -43,13 +43,13 @@ def get_issue_idle_at(issue):
 
     # If any contributor has commented on this issue, than it has been
     # implicitly accepted and will never become idle.
-    if any(github_api.is_contributer(issue.repo_id, comment["user"]["login"])
+    if any(github_api.is_contributor(issue.repo_id, comment["user"]["login"])
            for comment in comments):
         return None
 
     # Otherwise, it'll expire a set time after the issue was created
     issue_data = issue.fetch_issue_data()
-    return github_api.convert_date_time(issue_data["created_at"]) + datetime.timedelta(days=7)
+    return github_api.convert_date_time(issue_data["created_at"]) + datetime.timedelta(seconds=20)
 
 
 def get_pull_request_idle_at(pull_request):
@@ -98,7 +98,7 @@ def get_pull_request_idle_at(pull_request):
         if github_api.is_contributer(pull_request.repo_id, comment["user"]["login"]))
 
     created_at = github_api.convert_date_time(pull_request.fetch_issue_data()["created_at"])
-    return get_latest([created_at, last_unlabeled, last_commented]) + datetime.timedelta(days=7)
+    return get_latest([created_at, last_unlabeled, last_commented]) + datetime.timedelta(seconds=20)
 
 
 def get_issue_type(issue_or_pr):
