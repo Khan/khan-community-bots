@@ -1,4 +1,4 @@
 cron:
 - description: Check at risk issues
   url: /community-lead-bot/cron/check-at-risk-issues
-  schedule: every 8 hours
+  schedule: every 1 hours
