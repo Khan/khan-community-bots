@@ -39,6 +39,12 @@ def call_github_api(url, method=urlfetch.GET, payload=None):
     return json.loads(response.content)
 
 
+def get_issues_with_label(repo_id, label):
+    return call_github_api(
+        "/repos/{repo_id.owner}/{repo_id.name}/issues?labels={label}".format(
+            repo_id=repo_id, label=label))
+
+
 def convert_date_time(date_time_string):
     return datetime.datetime.strptime(date_time_string, "%Y-%m-%dT%H:%M:%SZ")
 

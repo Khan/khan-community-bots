@@ -68,8 +68,17 @@ class CheckAtRiskIssues(webapp2.RequestHandler):
         self.response.write("ok")
 
 
+class PingLeads(webapp2.RequestHandler):
+    def get(self):
+        community_lead_bot.ping_leads_of_idle_issues()
+
+        self.response.headers["Content-Type"] = "text/plain"
+        self.response.write("ok")
+
+
 app = webapp2.WSGIApplication([
     ("/health-check", HealthCheck),
     ("/community-lead-bot/webhooks/github/issue", IssueWebhook),
     ("/community-lead-bot/cron/check-at-risk-issues", CheckAtRiskIssues),
+    ("/community-lead-bot/cron/ping-leads", PingLeads),
 ])
