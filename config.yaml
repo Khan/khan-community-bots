@@ -1,0 +1,4 @@
+repos:
+  - owner: brownhead
+    name: haunted-house
+    leads: ["@johnsullivan"]

@@ -174,17 +174,17 @@ def ping_leads_of_idle_issues():
 
     If any issues or PRs are idle, we'll message the corresponding leads.
     """
-    repo_id = github_api.RepoID("brownhead", "haunted-house")
-    issues = github_api.get_issues_with_label(repo_id, "idle")
-    logging.info("issues %r", issues)
-    idle_issue_numbers = [(i["number"], i["html_url"]) for i in issues]
+    for repo_id in github_api.get_all_repos():
+        issues = github_api.get_issues_with_label(repo_id, "idle")
+        idle_issue_numbers = [(i["number"], i["html_url"]) for i in issues]
 
-    message = ('The following issue(s) in <{repo_url}|{repo}> are '
-               'idle: {issue_links}.').format(
-        repo_url="https://github.com/{}/{}".format(repo_id.owner, repo_id.name),
-        repo="{}/{}".format(repo_id.owner, repo_id.name),
-        issue_links=", ".join(
-            "<{link}|#{number}>".format(link=link, number=number)
-            for (number, link) in idle_issue_numbers))
-    
-    slack_api.send_message(message)
+        message = ('The following issue(s) in <{repo_url}|{repo}> are '
+                   'idle: {issue_links}. (cc: {leads})').format(
+            repo_url="https://github.com/{}/{}".format(repo_id.owner, repo_id.name),
+            repo="{}/{}".format(repo_id.owner, repo_id.name),
+            issue_links=", ".join(
+                "<{link}|#{number}>".format(link=link, number=number)
+                for (number, link) in idle_issue_numbers),
+            leads=", ".join(github_api.get_leads_for_repo(repo_id)))
+        
+        slack_api.send_message(message)

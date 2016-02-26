@@ -7,8 +7,21 @@ import datetime
 import google.appengine.api.urlfetch as urlfetch
 
 import secrets
+import config
 
 RepoID = collections.namedtuple("RepoID", ["owner", "name"])
+
+
+def get_all_repos():
+    return [RepoID(repo["owner"], repo["name"]) for repo in config.CONFIG["repos"]]
+
+
+def get_leads_for_repo(repo_id):
+    for repo in config.CONFIG["repos"]:
+        if repo["owner"] == repo_id.owner and repo["name"] == repo_id.name:
+            return repo["leads"]
+
+    raise KeyError("No repo with ID %r" % repo_id)
 
 
 def is_contributer(repo_id, user_login):
