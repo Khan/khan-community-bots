@@ -176,6 +176,9 @@ def ping_leads_of_idle_issues():
     """
     for repo_id in github_api.get_all_repos():
         issues = github_api.get_issues_with_label(repo_id, "idle")
+        if not issues:
+            continue
+
         idle_issue_numbers = [(i["number"], i["html_url"]) for i in issues]
 
         message = ('The following issue(s) in <{repo_url}|{repo}> are '

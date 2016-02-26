@@ -2,3 +2,7 @@ cron:
 - description: Check at risk issues
   url: /community-lead-bot/cron/check-at-risk-issues
   schedule: every 1 hours
+
+- description: Ping leads of repos with idle issues
+  url: /community-lead-bot/cron/ping-leads
+  schedule: every day 11:00
